@@ -14,7 +14,7 @@
 (setf c::*compile-in-constants* t)
 
 (defparameter *lisp-files*
-  (list "my")
+  (list "xw")
   "All Lisp files of the application.")
 
 (dolist (f *lisp-files*)
