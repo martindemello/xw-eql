@@ -56,12 +56,12 @@
         (let* ((size (qget widget "size"))
                (scale (floor (/ (apply 'min size) 20))))
 
-          (iter (for i from 0 to *N*)
-            (iter (for j from 0 to *N*)
+          (iter (for j from 0 to *N*)
+            (iter (for i from 0 to *N*)
               (let* ((x (* i scale))
                      (y (* j scale))
                      (sq (list (+ x 1) (+ y 1) scale scale))
-                     (c (aref *board* i j)))
+                     (c (aref *board* j i)))
                 (if (eql c #\#)
                   (progn
                     (! "setBrush(QBrush)" brush-black)
