@@ -14,11 +14,19 @@
 
 (in-package :xw)
 
-(defvar *xw* (qnew "QWidget(QWidget*,Qt::WindowFlags)" nil |Qt.WindowStaysOnTopHint|))
+;;; board and cursor
+(defstruct cursor x y dir)
 
-(defvar *N* 14)
+(defvar *cursor* (make-cursor :x 0 :y 0 :dir 'across))
 
-(defvar *board* (make-array (list (+ *N* 1) (+ *N* 1)) :initial-element #\Space))
+(defvar *N* 15)
+(defvar *M* (- *N* 1))
+
+(defun make-board (size)
+  (make-array (list size size) :initial-element #\Space))
+
+(defvar *board* (make-board *N*))
+
 (setf (aref *board* 0 0) #\H)
 (setf (aref *board* 0 1) #\E)
 (setf (aref *board* 0 2) #\L)
@@ -26,10 +34,14 @@
 (setf (aref *board* 0 4) #\O)
 (setf (aref *board* 0 5) #\#)
 
+
+;;; gui widget
+(defvar *xw* (qnew "QWidget(QWidget*,Qt::WindowFlags)" nil |Qt.WindowStaysOnTopHint|))
+
 (defun start ()
   (qset *xw* "font" (font 15))
-  (connect-grid-painter *xw*)
-  (qoverride *xw* "paintEvent(QPaintEvent*)" 'paint)
+  (define-overrides)
+  (qadd-event-filter nil |QEvent.KeyPress| 'key-pressed)
   (x:do-with (qfun *xw*) "show" "raise"))
 
 (defun brush (color)
@@ -45,32 +57,80 @@
       ("setPixelSize" size))
     font))
 
-(defun connect-grid-painter (widget)
-  (let ((painter (qnew "QPainter"))
-        (brush-black (brush "black"))
-        (brush-white (brush "white")))
-    (defun paint (ev)
-      (flet ((! (&rest args)
-                (apply 'qfun painter args)))
-        (! "begin(QWidget*)" widget)
-        (let* ((size (qget widget "size"))
-               (scale (floor (/ (apply 'min size) 20))))
+(defun draw ()
+  (qfun *xw* "repaint"))
 
-          (iter (for j from 0 to *N*)
-            (iter (for i from 0 to *N*)
-              (let* ((x (* i scale))
-                     (y (* j scale))
-                     (sq (list (+ x 1) (+ y 1) scale scale))
-                     (c (aref *board* j i)))
-                (if (eql c #\#)
-                  (progn
-                    (! "setBrush(QBrush)" brush-black)
-                    (! "drawRect(QRect)" sq))
-                  (progn
-                    (! "setBrush(QBrush)" brush-white)
-                    (! "drawRect(QRect)" sq)
-                    (! "drawText(QPoint,QString)" (list (+ x 5) (+ y (- scale 3))) (string c))) )))))
+(defun shift (x dx wrap)
+  (mod (+ x dx) wrap))
 
-        (! "end")))))
+(define-modify-macro shiftf (inc wrap) shift)
+
+(defun move (i j)
+  (setf (cursor-x *cursor*) (shift i (cursor-x *cursor*)))
+  (setf (cursor-y *cursor*) (shift j (cursor-y *cursor*)))
+  (draw))
+
+(defun key-pressed (obj event)
+  (case (qfun* event "QKeyEvent" "key")
+    (#.|Qt.Key_Up|
+     (move 0 -1))
+    (#.|Qt.Key_Down|
+     (move 0 1))
+    (#.|Qt.Key_Left|
+     (move -1 0))
+    (#.|Qt.Key_Right|
+     (move 1 0))
+    (t (return-from key-pressed)))
+  (draw)
+  t)
+
+
+(defun define-overrides ()
+  (x:do-with (qoverride *xw*)
+    ("paintEvent(QPaintEvent*)" 'paint)
+    ("mousePressEvent(QMouseEvent*)" 'mouse-press-event)))
+
+(defun mouse-press-event (event)
+  (let* ((pos (qfun event "pos"))
+           (x (first pos))
+           (y (second pos))
+           (size (qget *xw* "size"))
+           (scale (floor (/ (apply 'min size) 20)))
+           (i (floor (/ x scale)))
+           (j (floor (/ y scale))))
+    (setf (cursor-x *cursor*) i)
+    (setf (cursor-y *cursor*) j)
+    (draw)))
+
+(let ((painter (qnew "QPainter"))
+      (brush-black (brush "black"))
+      (brush-blue (brush "powderblue"))
+      (brush-white (brush "white")))
+  (defun paint (ev)
+    (flet ((! (&rest args)
+              (apply 'qfun painter args)))
+      (! "begin(QWidget*)" *xw*)
+      (let* ((size (qget *xw* "size"))
+             (scale (floor (/ (apply 'min size) 20))))
+
+        (iter (for j from 0 to *M*)
+          (iter (for i from 0 to *M*)
+            (let* ((x (* i scale))
+                   (y (* j scale))
+                   (sq (list (+ x 1) (+ y 1) scale scale))
+                   (c (aref *board* j i)))
+              (if (eql c #\#)
+                (progn
+                  (! "setBrush(QBrush)" brush-black)
+                  (! "drawRect(QRect)" sq))
+                (progn
+                  (if (and (= i (cursor-x *cursor*))
+                           (= j (cursor-y *cursor*)))
+                    (! "setBrush(QBrush)" brush-blue)
+                    (! "setBrush(QBrush)" brush-white))
+                  (! "drawRect(QRect)" sq)
+                  (! "drawText(QPoint,QString)" (list (+ x 5) (+ y (- scale 3))) (string c))) )))))
+
+      (! "end"))))
 
 (start)
