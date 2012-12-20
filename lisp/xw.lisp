@@ -44,9 +44,9 @@
   (qadd-event-filter nil |QEvent.KeyPress| 'key-pressed)
   (x:do-with (qfun *xw*) "show" "raise"))
 
-(defun brush (r g b a)
+(defun brush (r g b)
   (let ((brush (qnew "QBrush"))
-        (color (qfun "QColor" "fromRgb" r g b a)))
+        (color (qfun "QColor" "fromRgb" r g b)))
     (x:do-with (qfun brush)
       ("setStyle" |Qt.SolidPattern|)
       ("setColor(QColor)" color))
@@ -84,8 +84,21 @@
     ('across (move 1 0))
     ('down   (move 0 1))))
 
+(defun blackp (x y)
+  (eql (aref *board* y x) #\#))
+
+(defun toggle-black-current-square ()
+  (let ((x (cursor-x *cursor*))
+        (y (cursor-y *cursor*)))
+    (setf (aref *board* y x)
+          (if (blackp x y) #\Space #\#))))
+
 (defun unset-current-square (move)
-  (setf (aref *board* (cursor-y *cursor*) (cursor-x *cursor*)) #\Space)
+  (let ((x (cursor-x *cursor*))
+        (y (cursor-y *cursor*)))
+    ; do not overwrite a black square
+    (if (not (blackp x y))
+      (setf (aref *board* y x) #\Space)))
   (if move
     (case (cursor-dir *cursor*)
       ('across (move -1 0))
@@ -100,7 +113,7 @@
       (progn
         (case key
           (#.|Qt.Key_Space|
-           (set-current-square #\#))
+           (toggle-black-current-square))
           (#.|Qt.Key_Enter|
            (flip-cursor))
           (#.|Qt.Key_Return|
@@ -140,10 +153,10 @@
     (draw)))
 
 (let ((painter (qnew "QPainter"))
-      (brush-black (brush 0 0 0 255))
-      (brush-cursor-ac (brush 255 192 192 128))
-      (brush-cursor-dn (brush 192 255 192 128))
-      (brush-white (brush 255 255 255 255)))
+      (brush-black (brush 0 0 0))
+      (brush-cursor-ac (brush 255 192 192))
+      (brush-cursor-dn (brush 192 255 192))
+      (brush-white (brush 255 255 255)))
   (defun paint (ev)
     (flet ((! (&rest args)
               (apply 'qfun painter args)))
