@@ -44,8 +44,9 @@
   (qadd-event-filter nil |QEvent.KeyPress| 'key-pressed)
   (x:do-with (qfun *xw*) "show" "raise"))
 
-(defun brush (color)
-  (let ((brush (qnew "QBrush")))
+(defun brush (r g b a)
+  (let ((brush (qnew "QBrush"))
+        (color (qfun "QColor" "fromRgb" r g b a)))
     (x:do-with (qfun brush)
       ("setStyle" |Qt.SolidPattern|)
       ("setColor(QColor)" color))
@@ -60,29 +61,65 @@
 (defun draw ()
   (qfun *xw* "repaint"))
 
-(defun shift (x dx wrap)
-  (mod (+ x dx) wrap))
+; increment and wraparound
+(defun wrap (x dx w)
+  (mod (+ x dx) w))
 
-(define-modify-macro shiftf (inc wrap) shift)
+(define-modify-macro wrapf (inc w) wrap)
 
 (defun move (i j)
-  (setf (cursor-x *cursor*) (shift i (cursor-x *cursor*)))
-  (setf (cursor-y *cursor*) (shift j (cursor-y *cursor*)))
+  (wrapf (cursor-x *cursor*) i *N*)
+  (wrapf (cursor-y *cursor*) j *N*)
   (draw))
 
+(defun flip-cursor ()
+  (setf (cursor-dir *cursor*)
+        (case (cursor-dir *cursor*)
+          ('across 'down)
+          ('down 'across))))
+
+(defun set-current-square (c)
+  (setf (aref *board* (cursor-y *cursor*) (cursor-x *cursor*)) c)
+  (case (cursor-dir *cursor*)
+    ('across (move 1 0))
+    ('down   (move 0 1))))
+
+(defun unset-current-square (move)
+  (setf (aref *board* (cursor-y *cursor*) (cursor-x *cursor*)) #\Space)
+  (if move
+    (case (cursor-dir *cursor*)
+      ('across (move -1 0))
+      ('down   (move 0 -1)))))
+
 (defun key-pressed (obj event)
-  (case (qfun* event "QKeyEvent" "key")
-    (#.|Qt.Key_Up|
-     (move 0 -1))
-    (#.|Qt.Key_Down|
-     (move 0 1))
-    (#.|Qt.Key_Left|
-     (move -1 0))
-    (#.|Qt.Key_Right|
-     (move 1 0))
-    (t (return-from key-pressed)))
-  (draw)
-  t)
+  (let ((key (qfun* event "QKeyEvent" "key")))
+    ; letters
+    (if (and (>= key |Qt.Key_A|)
+             (<= key |Qt.Key_Z|))
+      (set-current-square (code-char key))
+      (progn
+        (case key
+          (#.|Qt.Key_Space|
+           (set-current-square #\#))
+          (#.|Qt.Key_Enter|
+           (flip-cursor))
+          (#.|Qt.Key_Return|
+           (flip-cursor))
+          (#.|Qt.Key_Delete|
+           (unset-current-square nil))
+          (#.|Qt.Key_Backspace|
+           (unset-current-square t))
+          (#.|Qt.Key_Up|
+           (move 0 -1))
+          (#.|Qt.Key_Down|
+           (move 0 1))
+          (#.|Qt.Key_Left|
+           (move -1 0))
+          (#.|Qt.Key_Right|
+           (move 1 0))
+          (t (return-from key-pressed)))))
+    (draw)
+    t))
 
 
 (defun define-overrides ()
@@ -103,9 +140,10 @@
     (draw)))
 
 (let ((painter (qnew "QPainter"))
-      (brush-black (brush "black"))
-      (brush-blue (brush "powderblue"))
-      (brush-white (brush "white")))
+      (brush-black (brush 0 0 0 255))
+      (brush-cursor-ac (brush 255 192 192 128))
+      (brush-cursor-dn (brush 192 255 192 128))
+      (brush-white (brush 255 255 255 255)))
   (defun paint (ev)
     (flet ((! (&rest args)
               (apply 'qfun painter args)))
@@ -119,17 +157,29 @@
                    (y (* j scale))
                    (sq (list (+ x 1) (+ y 1) scale scale))
                    (c (aref *board* j i)))
+              ; square
               (if (eql c #\#)
                 (progn
                   (! "setBrush(QBrush)" brush-black)
                   (! "drawRect(QRect)" sq))
                 (progn
-                  (if (and (= i (cursor-x *cursor*))
-                           (= j (cursor-y *cursor*)))
-                    (! "setBrush(QBrush)" brush-blue)
-                    (! "setBrush(QBrush)" brush-white))
+                  (! "setBrush(QBrush)" brush-white))
                   (! "drawRect(QRect)" sq)
-                  (! "drawText(QPoint,QString)" (list (+ x 5) (+ y (- scale 3))) (string c))) )))))
+                  (! "drawText(QPoint,QString)"
+                     (list (+ x 5) (+ y (- scale 3))) (string c)))
+
+              ; cursor
+              (if (and (= i (cursor-x *cursor*))
+                       (= j (cursor-y *cursor*)))
+                (let ((b (if (eql (cursor-dir *cursor*) 'across)
+                           brush-cursor-ac
+                           brush-cursor-dn)))
+                  (! "save")
+                  (! "setOpacity" 0.5)
+                  (! "setBrush(QBrush)" b)
+                  (! "drawRect(QRect)" sq)
+                  (! "restore")))
+            ))))
 
       (! "end"))))
 
