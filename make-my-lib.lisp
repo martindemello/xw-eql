@@ -5,8 +5,6 @@
 
 (setf *break-on-signals* 'error)
 
-(load "tr")
-
 (unless (find-package :c)
   (make-package :c))
 

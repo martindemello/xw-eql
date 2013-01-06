@@ -59,6 +59,7 @@
     font))
 
 (defun draw ()
+  (format t "drawing")
   (qfun *xw* "repaint"))
 
 ; increment and wraparound
@@ -134,7 +135,6 @@
     (draw)
     t))
 
-
 (defun define-overrides ()
   (x:do-with (qoverride *xw*)
     ("paintEvent(QPaintEvent*)" 'paint)
@@ -142,24 +142,25 @@
 
 (defun mouse-press-event (event)
   (let* ((pos (qfun event "pos"))
-           (x (first pos))
-           (y (second pos))
-           (size (qget *xw* "size"))
-           (scale (floor (/ (apply 'min size) 20)))
-           (i (floor (/ x scale)))
-           (j (floor (/ y scale))))
+         (x (first pos))
+         (y (second pos))
+         (size (qget *xw* "size"))
+         (scale (floor (/ (apply 'min size) 20)))
+         (i (floor (/ x scale)))
+         (j (floor (/ y scale))))
     (setf (cursor-x *cursor*) i)
-    (setf (cursor-y *cursor*) j)
-    (draw)))
+    (setf (cursor-y *cursor*) j))
+  (draw))
 
 (let ((painter (qnew "QPainter"))
       (brush-black (brush 0 0 0 255))
       (brush-cursor-ac (brush 255 192 192 128))
       (brush-cursor-dn (brush 192 255 192 128))
       (brush-white (brush 255 255 255 255)))
-  (defun paint (ev)
-    (flet ((! (&rest args)
-              (apply 'qfun painter args)))
+  (flet ((! (&rest args)
+            (apply 'qfun painter args)))
+    (defun paint (ev)
+      (format t "repainting")
       (! "begin(QWidget*)" *xw*)
       (let* ((size (qget *xw* "size"))
              (scale (floor (/ (apply 'min size) 20))))
