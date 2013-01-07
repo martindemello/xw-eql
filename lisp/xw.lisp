@@ -59,8 +59,7 @@
     font))
 
 (defun draw ()
-  (format t "drawing")
-  (qfun *xw* "repaint"))
+  (qfun *xw* "update"))
 
 ; increment and wraparound
 (defun wrap (x dx w)
@@ -160,7 +159,6 @@
   (flet ((! (&rest args)
             (apply 'qfun painter args)))
     (defun paint (ev)
-      (format t "repainting")
       (! "begin(QWidget*)" *xw*)
       (let* ((size (qget *xw* "size"))
              (scale (floor (/ (apply 'min size) 20))))
